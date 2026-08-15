@@ -1,0 +1,48 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function role() {
+      return signedIn() && userDoc().data.role;
+    }
+
+    function isAdmin() {
+      return role() == 'admin';
+    }
+
+    function isLecturer() {
+      return role() == 'lecturer';
+    }
+
+    function isStudent() {
+      return role() == 'student';
+    }
+
+    match /course-materials/{courseId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || isLecturer();
+    }
+
+    match /submissions/{studentId}/{assignmentId}/{fileName} {
+      allow read: if isAdmin() || isLecturer() || request.auth.uid == studentId;
+      allow write: if isAdmin() || request.auth.uid == studentId;
+    }
+
+    match /profile-images/{userId}/{fileName} {
+      allow read: if signedIn();
+      allow write: if isAdmin() || request.auth.uid == userId;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,134 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userDocExists() {
+      return userDoc().data != null;
+    }
+
+    function userRole() {
+      return userDocExists() ? userDoc().data.role : null;
+    }
+
+    function role() {
+      return signedIn() && userRole();
+    }
+
+    function isAdmin() {
+      return role() == 'admin';
+    }
+
+    function isLecturer() {
+      return role() == 'lecturer';
+    }
+
+    function isStudent() {
+      return role() == 'student';
+    }
+
+    function ownsUserDoc(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function assignedLecturer() {
+      return signedIn() && resource.data.lecturerId == request.auth.uid;
+    }
+
+    function incomingAssignedLecturer() {
+      return signedIn() && request.resource.data.lecturerId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow create: if ownsUserDoc(userId);
+      allow read: if ownsUserDoc(userId) || isAdmin();
+      allow update: if ownsUserDoc(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /courses/{courseId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow read: if isAdmin() || isLecturer() || request.auth.uid == resource.data.studentId;
+      allow create: if isAdmin() || (isStudent() && request.auth.uid == request.resource.data.studentId);
+      allow update, delete: if isAdmin();
+    }
+
+    match /courseMaterials/{materialId} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || (isLecturer() && incomingAssignedLecturer());
+      allow update, delete: if isAdmin() || (isLecturer() && assignedLecturer());
+    }
+
+    match /assignments/{assignmentId} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || (isLecturer() && incomingAssignedLecturer());
+      allow update, delete: if isAdmin() || (isLecturer() && assignedLecturer());
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if isAdmin() || isLecturer() || request.auth.uid == resource.data.studentId;
+      allow create: if isStudent() && request.auth.uid == request.resource.data.studentId;
+      allow update: if isAdmin() || isLecturer() || request.auth.uid == resource.data.studentId;
+      allow delete: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin() || isLecturer();
+    }
+
+    match /quizzes/{quizId} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || (isLecturer() && incomingAssignedLecturer());
+      allow update, delete: if isAdmin() || (isLecturer() && assignedLecturer());
+    }
+
+    match /quizAttempts/{attemptId} {
+      allow read: if isAdmin() || isLecturer() || request.auth.uid == resource.data.studentId;
+      allow create: if isStudent() && request.auth.uid == request.resource.data.studentId;
+      allow update: if isAdmin() || isLecturer();
+      allow delete: if isAdmin();
+    }
+
+    match /codingChallenges/{challengeId} {
+      allow read: if signedIn();
+      allow create: if isAdmin() || (isLecturer() && incomingAssignedLecturer());
+      allow update, delete: if isAdmin() || (isLecturer() && assignedLecturer());
+    }
+
+    match /codeSubmissions/{submissionId} {
+      allow read: if isAdmin() || isLecturer() || request.auth.uid == resource.data.studentId;
+      allow create: if isStudent() && request.auth.uid == request.resource.data.studentId;
+      allow update: if isAdmin() || isLecturer() || request.auth.uid == resource.data.studentId;
+      allow delete: if isAdmin();
+    }
+
+    match /discussions/{threadId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if isAdmin() || isLecturer() || request.auth.uid == resource.data.studentId;
+      allow delete: if isAdmin() || isLecturer();
+    }
+
+    match /progress/{progressId} {
+      allow read: if isAdmin() || isLecturer() || request.auth.uid == resource.data.studentId;
+      allow create, update: if isAdmin() || isLecturer();
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
